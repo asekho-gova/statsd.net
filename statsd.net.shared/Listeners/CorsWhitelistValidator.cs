@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Xml;
 using System.Xml.Serialization;
-using Kayak.Http;
+using Microsoft.AspNetCore.Http;
 
 namespace statsd.net.shared.Listeners
 {
@@ -72,35 +72,35 @@ namespace statsd.net.shared.Listeners
 
     // Note: Implemented per https://www.w3.org/TR/cors
     // Simple Request (6.1) and Preflight (6.2) have been merged for simplicity
-    public Dictionary<string, string> AppendCorsHeaderDictionary(HttpRequestHead head, Dictionary<string, string> headers)
+    public Dictionary<string, string> AppendCorsHeaderDictionary(HttpRequest request, Dictionary<string, string> headers)
     {
       var result = new Dictionary<string, string>(headers);
       // Prevent caching: removing this will cause upstream cache to return invalid responses to client requests
       result.Add("Vary", "Origin");
 
       // Verify origin is specified
-      if (!head.Headers.ContainsKey("Origin"))
+      if (!request.Headers.ContainsKey("Origin"))
         goto Exit;
-      if (head.Headers["Origin"] == "null")
+      if (request.Headers["Origin"] == "null")
         goto Exit;
 
       // Match origin to whitelist
-      if (!_whitelist.Any(w => string.Equals(w, head.Headers["Origin"], StringComparison.Ordinal)))
+      if (!_whitelist.Any(w => string.Equals(w, request.Headers["Origin"], StringComparison.Ordinal)))
         goto Exit;
 
       // Preflight
-      if (head.Method == "OPTIONS")
+      if (request.Method == "OPTIONS")
       {
         // Parse request methods
-        var reqMethod = head.Headers.ContainsKey("Access-Control-Request-Method")
-          ? head.Headers["Access-Control-Request-Method"]
+        var reqMethod = request.Headers.ContainsKey("Access-Control-Request-Method")
+          ? request.Headers["Access-Control-Request-Method"]
           : null;
         if (reqMethod == null)
           goto Exit; // Parse failed
 
         // Parse request headers
-        var reqHeaders = head.Headers.ContainsKey("Access-Control-Request-Headers")
-          ? head.Headers["Access-Control-Request-Headers"]
+        var reqHeaders = request.Headers.ContainsKey("Access-Control-Request-Headers")
+          ? request.Headers["Access-Control-Request-Headers"]
             .Split(new[] { ',', ' ' }, StringSplitOptions.RemoveEmptyEntries)
           : null;
         // Not sure that this is required - seems to cause issues with some clients
@@ -119,7 +119,7 @@ namespace statsd.net.shared.Listeners
       }
 
       // Append allow
-      result.Add("Access-Control-Allow-Origin", head.Headers["Origin"]);
+      result.Add("Access-Control-Allow-Origin", request.Headers["Origin"]);
       // Credentials not used
       // Exposed headers not used
 

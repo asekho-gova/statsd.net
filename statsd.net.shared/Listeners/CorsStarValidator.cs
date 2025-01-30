@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using Kayak.Http;
+using Microsoft.AspNetCore.Http;
 
 namespace statsd.net.shared.Listeners
 {
@@ -13,9 +13,9 @@ namespace statsd.net.shared.Listeners
 
     }
 
-    public Dictionary<string, string> AppendCorsHeaderDictionary(HttpRequestHead head, Dictionary<string, string> headers)
+    public Dictionary<string, string> AppendCorsHeaderDictionary(HttpRequest request, Dictionary<string, string> headers)
     {
-      if (head.Method == "OPTIONS")
+      if (request.Method == "OPTIONS")
         return new Dictionary<string, string>(headers)
         {
           {"Access-Control-Allow-Origin", "*"},

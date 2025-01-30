@@ -222,7 +222,7 @@ namespace statsd.net
                 else if (listenerConfig is HTTPListenerConfiguration)
                 {
                     var httpConfig = listenerConfig as HTTPListenerConfiguration;
-                    AddListener(new HttpStatsListener(httpConfig.Port, systemMetrics, GetCorsValidationProvider(httpConfig)));
+                    AddListener(new AspNetCoreStatsListener(httpConfig.Port, systemMetrics, GetCorsValidationProvider(httpConfig)));
                     systemMetrics.LogCount("startup.listener.http." + httpConfig.Port);
                 }
                 else if (listenerConfig is StatsdnetListenerConfiguration)
