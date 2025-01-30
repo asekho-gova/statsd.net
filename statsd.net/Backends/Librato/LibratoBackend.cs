@@ -2,7 +2,9 @@
 using System.Xml.Linq;
 using log4net;
 using Microsoft.Practices.TransientFaultHandling;
-using RestSharp;
+using System.Net.Http;
+using System.Net.Http.Json;
+using System.Text.Json;
 using statsd.net.Configuration;
 using statsd.net.core;
 using statsd.net.core.Backends;
@@ -46,7 +48,7 @@ namespace statsd.net.Backends.Librato
     private ActionBlock<Bucket> _preprocessorBlock;
     private BatchBlock<LibratoMetric> _batchBlock;
     private ActionBlock<LibratoMetric[]> _outputBlock;
-    private RestClient _client;
+    private HttpClient _client;
     private ISystemMetricsService _systemMetrics;
     private int _pendingOutputCount;
     private RetryPolicy<LibratoErrorDetectionStrategy> _retryPolicy;
@@ -86,9 +88,14 @@ namespace statsd.net.Backends.Librato
       _outputBlock = new ActionBlock<LibratoMetric[]>(lines => PostToLibrato(lines), Utility.OneAtATimeExecution());
       _batchBlock.LinkTo(_outputBlock);
 
-      _client = new RestClient(LIBRATO_API_URL);
-      _client.Authenticator = new HttpBasicAuthenticator(_config.Email, _config.Token);
-      _client.Timeout = (int)_config.PostTimeout.TotalMilliseconds;
+      _client = new HttpClient();
+      _client.BaseAddress = new Uri(LIBRATO_API_URL);
+      _client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+          "Basic", 
+          Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($"{_config.Email}:{_config.Token}"))
+      );
+      _client.DefaultRequestHeaders.Add("User-Agent", "statsd.net-librato-backend/" + _serviceVersion);
+      _client.Timeout = _config.PostTimeout;
 
       _retryPolicy = new RetryPolicy<LibratoErrorDetectionStrategy>(_config.NumRetries);
       _retryPolicy.Retrying += (sender, args) =>
@@ -201,32 +208,28 @@ namespace statsd.net.Backends.Librato
         _systemMetrics.LogGauge("backends.librato.lines", pendingLines);
         Interlocked.Add(ref _pendingOutputCount, pendingLines);
 
-        var request = new RestRequest("/v1/metrics", Method.POST);
-        request.RequestFormat = DataFormat.Json;
-        request.AddHeader("User-Agent", "statsd.net-librato-backend/" + _serviceVersion);
-        request.AddBody(payload);
-
-        _retryPolicy.ExecuteAction(() =>
+        _retryPolicy.ExecuteAction(async () =>
           {
             bool succeeded = false;
             try
             {
               _systemMetrics.LogCount("backends.librato.post.attempt");
-              var result = _client.Execute(request);
-              if (result.StatusCode == HttpStatusCode.Unauthorized)
+              var response = await _client.PostAsJsonAsync("/v1/metrics", payload);
+              
+              if (response.StatusCode == HttpStatusCode.Unauthorized)
               {
                 _systemMetrics.LogCount("backends.librato.error.unauthorised");
                 throw new UnauthorizedAccessException("Librato.com reports that your access is not authorised. Is your API key and email address correct?");
               }
-              else if (result.StatusCode != HttpStatusCode.OK)
+              else if (!response.IsSuccessStatusCode)
               {
-                _systemMetrics.LogCount("backends.librato.error." + result.StatusCode.ToString());
-                throw new Exception(String.Format("Request could not be processed. Server said {0}", result.StatusCode.ToString()));
+                _systemMetrics.LogCount("backends.librato.error." + response.StatusCode.ToString());
+                throw new Exception($"Request could not be processed. Server said {response.StatusCode}");
               }
               else
               {
                 succeeded = true;
-                _log.Info(String.Format("Wrote {0} lines to Librato.", pendingLines));
+                _log.Info($"Wrote {pendingLines} lines to Librato.");
               }
             }
             finally

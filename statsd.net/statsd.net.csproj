@@ -12,7 +12,7 @@
   <ItemGroup>
     <PackageReference Include="log4net" Version="2.0.15" />
     <PackageReference Include="Microsoft.Practices.TransientFaultHandling.Core" Version="5.1.1209.1" />
-    <PackageReference Include="RestSharp" Version="104.4.0" />
+    <PackageReference Include="System.Net.Http.Json" Version="8.0.0" />
     <PackageReference Include="StatsdCsharpClient" Version="1.2.1.0" />
     <PackageReference Include="System.Threading.Tasks.Dataflow" Version="8.0.0" />
     <PackageReference Include="System.Configuration.ConfigurationManager" Version="8.0.0" />
